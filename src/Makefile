@@ -137,6 +137,13 @@ web-game: $(SRC)
 linux: $(SRC_NATIVE)
 	$(CC_NATIVE) $(SRC_NATIVE) -o ../dist/lupinho $(NATIVE_INCLUDE) $(CFLAGS) $(NATIVE_LIBS) $(OPTIMIZATION)
 
+# macOS Target (native desktop; compiles Lua for Darwin, does not overwrite Linux liblua.a)
+macos: $(SRC_NATIVE) $(LUA_55_SRC)
+	@mkdir -p ../dist
+	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
+		$(MACOS_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX \
+		$(MACOS_LIBS) $(OPTIMIZATION)
+
 # Linux Static Target (portable binary with static raylib)
 # Note: Still requires libarchive.so.13 on target system
 static: $(SRC_NATIVE) $(RAYLIB_LINUX_STATIC)
