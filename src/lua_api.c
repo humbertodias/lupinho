@@ -5,7 +5,7 @@
 
 #include "lua_api.h"
 #include "ui.h"
-#include "raylib.h"
+#include "lupi_input.h"
 
 lua_State *globalLuaState = NULL;
 
@@ -218,67 +218,22 @@ int lua_spr(lua_State *L) {
 }
 
 //----------------------------------------------------------------------------------
-// Helper function to get the keyboard key corresponding to a gamepad button
-//----------------------------------------------------------------------------------
-static int get_keyboard_key_for_button(int button) {
-    switch (button) {
-        // D-pad / AWSD keys
-        case GAMEPAD_BUTTON_LEFT_FACE_UP:    return KEY_W;
-        case GAMEPAD_BUTTON_LEFT_FACE_DOWN:  return KEY_S;
-        case GAMEPAD_BUTTON_LEFT_FACE_LEFT:  return KEY_A;
-        case GAMEPAD_BUTTON_LEFT_FACE_RIGHT: return KEY_D;
-        // Action buttons
-        case GAMEPAD_BUTTON_RIGHT_FACE_RIGHT: return KEY_J;
-        case GAMEPAD_BUTTON_RIGHT_FACE_DOWN:  return KEY_K;
-        case GAMEPAD_BUTTON_RIGHT_FACE_UP:    return KEY_L;
-        case GAMEPAD_BUTTON_RIGHT_FACE_LEFT:  return KEY_M;
-        case GAMEPAD_BUTTON_LEFT_TRIGGER_1:   return KEY_G;
-        case GAMEPAD_BUTTON_RIGHT_TRIGGER_1:  return KEY_H;
-        default: return -1;
-    }
-}
-
-//----------------------------------------------------------------------------------
 // ui.btn(button:number, pad:number) -> bool
-// Checks both gamepad and keyboard input
 //----------------------------------------------------------------------------------
 int lua_btn(lua_State *L) {
     int button = (int)luaL_checknumber(L, 1);
     int pad = (int)luaL_optnumber(L, 2, 0);
-
-    bool is_down = IsGamepadButtonDown(pad, button);
-
-    if (!is_down) {
-        int key = get_keyboard_key_for_button(button);
-        if (key != -1) {
-            is_down = IsKeyDown(key);
-        }
-    }
-
-    lua_pushboolean(L, is_down);
-
+    lua_pushboolean(L, lupi_button_down(pad, button));
     return 1;
 }
 
 //----------------------------------------------------------------------------------
 // ui.btnp(button:number, pad:number) -> bool
-// Checks both gamepad and keyboard input (pressed this frame)
 //----------------------------------------------------------------------------------
 int lua_btnp(lua_State *L) {
     int button = (int)luaL_checknumber(L, 1);
     int pad = (int)luaL_optnumber(L, 2, 0);
-
-    bool is_pressed = IsGamepadButtonPressed(pad, button);
-
-    if (!is_pressed) {
-        int key = get_keyboard_key_for_button(button);
-        if (key != -1) {
-            is_pressed = IsKeyPressed(key);
-        }
-    }
-
-    lua_pushboolean(L, is_pressed);
-
+    lua_pushboolean(L, lupi_button_pressed(pad, button));
     return 1;
 }
 
@@ -818,7 +773,7 @@ void lua_api_init(void) {
 //----------------------------------------------------------------------------------
 // lua_api_setup_game — configure package path, register sprites preload, load game
 //----------------------------------------------------------------------------------
-void lua_api_setup_game(const char *game_dir) {
+int lua_api_setup_game(const char *game_dir) {
     snprintf(current_game_dir, sizeof(current_game_dir), "%s", game_dir);
 
     lua_getglobal(globalLuaState, "package");
@@ -826,13 +781,13 @@ void lua_api_setup_game(const char *game_dir) {
     lua_getfield(globalLuaState, -1, "path");
     const char *current_path = lua_tostring(globalLuaState, -1);
     lua_pop(globalLuaState, 1);
-    lua_pushfstring(globalLuaState, "%s;%s/?.lua", current_path, game_dir);
+    lua_pushfstring(globalLuaState, "%s;%s/?.lua;%s/?/init.lua", current_path, game_dir, game_dir);
     lua_setfield(globalLuaState, -2, "path");
 
     lua_getfield(globalLuaState, -1, "preload");
     lua_pushcfunction(globalLuaState, lua_sprites_loader);
     lua_setfield(globalLuaState, -2, "sprites");
-    lua_pop(globalLuaState, 2); // pop preload and package
+    lua_pop(globalLuaState, 2);
 
     char game_path[512];
     snprintf(game_path, sizeof(game_path), "%s/game.lua", game_dir);
@@ -840,7 +795,9 @@ void lua_api_setup_game(const char *game_dir) {
     if (luaL_dofile(globalLuaState, game_path) != LUA_OK) {
         printf("Error loading game: %s\n", lua_tostring(globalLuaState, -1));
         lua_pop(globalLuaState, 1);
+        return 1;
     }
+    return 0;
 }
 
 //----------------------------------------------------------------------------------
@@ -866,6 +823,8 @@ void lua_api_call_update(void) {
 // lua_api_close — shut down the Lua state
 //----------------------------------------------------------------------------------
 void lua_api_close(void) {
-    lua_close(globalLuaState);
-    globalLuaState = NULL;
+    if (globalLuaState) {
+        lua_close(globalLuaState);
+        globalLuaState = NULL;
+    }
 }

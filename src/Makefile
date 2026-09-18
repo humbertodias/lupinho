@@ -5,7 +5,7 @@ CC = emcc
 CC_NATIVE = gcc
 
 # Source Files
-SRC = main.c ui.c lua_api.c
+SRC = main.c ui.c lua_api.c lupi_input.c
 
 # Output File
 OUTPUT = ../dist/game.html
@@ -33,7 +33,62 @@ STATIC_LIBS = $(RAYLIB_LINUX_STATIC) $(LUA_55_LIB)
 STATIC_LIBS_FLAGS = -Wl,-Bstatic $(RAYLIB_LINUX_STATIC) $(LUA_55_LIB) -Wl,-Bdynamic -lm -ldl -lpthread -lX11 -larchive
 
 # Native (Linux) Source Files
-SRC_NATIVE = main.c ui.c lua_api.c zip.c
+SRC_NATIVE = main.c ui.c lua_api.c zip.c lupi_input.c
+
+# Libretro core
+LIBRETRO_SRC = ui.c lua_api.c zip.c lupi_input.c libretro/libretro.c
+LUA_LIBRETRO_SRC = \
+	libs/linux/lua-5.5.0/src/lapi.c \
+	libs/linux/lua-5.5.0/src/lcode.c \
+	libs/linux/lua-5.5.0/src/lctype.c \
+	libs/linux/lua-5.5.0/src/ldebug.c \
+	libs/linux/lua-5.5.0/src/ldo.c \
+	libs/linux/lua-5.5.0/src/ldump.c \
+	libs/linux/lua-5.5.0/src/lfunc.c \
+	libs/linux/lua-5.5.0/src/lgc.c \
+	libs/linux/lua-5.5.0/src/llex.c \
+	libs/linux/lua-5.5.0/src/lmem.c \
+	libs/linux/lua-5.5.0/src/lobject.c \
+	libs/linux/lua-5.5.0/src/lopcodes.c \
+	libs/linux/lua-5.5.0/src/lparser.c \
+	libs/linux/lua-5.5.0/src/lstate.c \
+	libs/linux/lua-5.5.0/src/lstring.c \
+	libs/linux/lua-5.5.0/src/ltable.c \
+	libs/linux/lua-5.5.0/src/ltm.c \
+	libs/linux/lua-5.5.0/src/lundump.c \
+	libs/linux/lua-5.5.0/src/lvm.c \
+	libs/linux/lua-5.5.0/src/lzio.c \
+	libs/linux/lua-5.5.0/src/lauxlib.c \
+	libs/linux/lua-5.5.0/src/lbaselib.c \
+	libs/linux/lua-5.5.0/src/lcorolib.c \
+	libs/linux/lua-5.5.0/src/ldblib.c \
+	libs/linux/lua-5.5.0/src/liolib.c \
+	libs/linux/lua-5.5.0/src/lmathlib.c \
+	libs/linux/lua-5.5.0/src/loadlib.c \
+	libs/linux/lua-5.5.0/src/loslib.c \
+	libs/linux/lua-5.5.0/src/lstrlib.c \
+	libs/linux/lua-5.5.0/src/ltablib.c \
+	libs/linux/lua-5.5.0/src/lutf8lib.c \
+	libs/linux/lua-5.5.0/src/linit.c
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	LIBRETRO_EXT = dylib
+	LIBRETRO_SOFLAGS = -dynamiclib
+	LIBRETRO_LIBS = -lz -lm
+else
+	LIBRETRO_EXT = so
+	LIBRETRO_SOFLAGS = -shared
+	LIBRETRO_LIBS = -lz -lm -ldl
+endif
+
+LIBARCHIVE_CFLAGS := $(shell pkg-config --cflags libarchive 2>/dev/null)
+LIBARCHIVE_LIBS := $(shell pkg-config --libs libarchive 2>/dev/null)
+ifeq ($(LIBARCHIVE_LIBS),)
+	LIBARCHIVE_LIBS = -larchive
+endif
+
+LIBRETRO_OUTPUT = ../dist/lupinho_libretro.$(LIBRETRO_EXT)
 
 # Compilation Flags
 CFLAGS = -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
@@ -87,10 +142,20 @@ linux: $(SRC_NATIVE)
 static: $(SRC_NATIVE) $(RAYLIB_LINUX_STATIC)
 	$(CC_NATIVE) $(SRC_NATIVE) -o ../dist/lupinho-static $(NATIVE_INCLUDE) $(CFLAGS) $(STATIC_LIBS_FLAGS) $(OPTIMIZATION) -s
 
+# Libretro core (RetroArch). Output: dist/lupinho_libretro.so (or .dylib on macOS)
+libretro: $(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC)
+	@mkdir -p ../dist
+	$(CC_NATIVE) -fPIC $(LIBRETRO_SOFLAGS) -o $(LIBRETRO_OUTPUT) \
+		$(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC) \
+		-I. -Ilibretro $(LUA_55_INCLUDE) \
+		$(CFLAGS) -DLIBRETRO -DLUA_USE_POSIX $(OPTIMIZATION) \
+		$(LIBRETRO_LIBS)
+	cp -f libretro/lupinho_libretro.info ../dist/lupinho_libretro.info
+
 # Clean generated files
 clean:
 	rm -rf ../dist/webgame/
-	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static
+	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static $(LIBRETRO_OUTPUT)
 
 # Help
 help:
@@ -103,14 +168,16 @@ help:
 	@echo "  make web-game GAME_PATH=game.lupi - Build for Web with embedded .lupi game (output: dist/webgame/)"
 	@echo "  make linux       - Build for Linux desktop (requires raylib, libarchive)"
 	@echo "  make static      - Build portable Linux binary (static raylib + Lua)"
+	@echo "  make libretro    - Build Libretro core (RetroArch): dist/lupinho_libretro.so"
 	@echo "  make clean       - Remove generated files"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  make web         - Emscripten SDK"
 	@echo "  make linux       - pacman: raylib libarchive"
 	@echo "  make static      - pacman: libarchive (raylib statically linked)"
+	@echo "  make libretro    - zlib"
 	@echo ""
 	@echo "Note: For WebAssembly builds, Lua must be compiled with Emscripten."
 	@echo "      If you get linking errors, you may need to compile Lua with emcc."
 
-.PHONY: web production linux static clean help
+.PHONY: web production linux static libretro clean help
