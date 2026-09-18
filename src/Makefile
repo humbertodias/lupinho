@@ -105,7 +105,7 @@ linux: $(SRC_NATIVE)
 macos: $(SRC_NATIVE) $(LUA_55_SRC)
 	@mkdir -p ../dist
 	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
-		$(MACOS_INCLUDE) $(CFLAGS) -DLUA_USE_MACOSX \
+		$(MACOS_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX \
 		$(MACOS_LIBS) $(OPTIMIZATION)
 
 # Linux Static Target (portable binary with static raylib)
