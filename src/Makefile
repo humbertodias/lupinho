@@ -169,7 +169,7 @@ libretro: $(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC)
 		$(LIBRETRO_LIBS)
 	cp -f libretro/lupinho_libretro.info ../dist/lupinho_libretro.info
 
-# Cross-compile Libretro core for Windows from Linux (MinGW-w64).
+# Cross-compile Libretro core for Windows (MinGW-w64, POSIX host).
 # Output: dist/lupinho_libretro.dll
 MINGW_CC ?= x86_64-w64-mingw32-gcc
 libretro-win: $(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC)
@@ -177,7 +177,7 @@ libretro-win: $(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC)
 	$(MINGW_CC) -shared -o ../dist/lupinho_libretro.dll \
 		$(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC) \
 		-I. -Ilibretro $(LUA_55_INCLUDE) \
-		$(CFLAGS) -DLIBRETRO $(OPTIMIZATION) \
+		$(CFLAGS) -DLIBRETRO -DLUA_USE_POSIX $(OPTIMIZATION) \
 		-lz -lm -static-libgcc
 	cp -f libretro/lupinho_libretro.info ../dist/lupinho_libretro.info
 

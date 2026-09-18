@@ -21,42 +21,31 @@ jobs:
         include:
           - name: linux
             os: ubuntu-latest
+            target: libretro
             artifact: lupinho_libretro.so
           - name: macos
             os: macos-latest
+            target: libretro
             artifact: lupinho_libretro.dylib
           - name: windows
-            os: windows-latest
+            os: ubuntu-latest
+            target: libretro-win
             artifact: lupinho_libretro.dll
 
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Linux deps
-        if: runner.os == 'Linux'
+        if: matrix.name == 'linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev
 
-      - name: Setup MSYS2
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            make
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-zlib
+      - name: Install MinGW (Windows core)
+        if: matrix.name == 'windows'
+        run: sudo apt-get update && sudo apt-get install -y make gcc-mingw-w64-x86-64 libz-mingw-w64-dev
 
       - name: Build
-        if: runner.os != 'Windows'
         working-directory: src
-        run: make libretro
-
-      - name: Build
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        working-directory: src
-        run: make libretro
+        run: make ${{ matrix.target }}
 
       - name: Upload core
         uses: actions/upload-artifact@v7
