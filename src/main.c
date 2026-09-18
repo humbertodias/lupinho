@@ -56,9 +56,21 @@ void lupi_load_game(const char *game_dir) {
 #endif
 
 #if !defined(PLATFORM_WEB)
+static const char *host_platform_name(void) {
+#if defined(__APPLE__)
+    return "macOS";
+#elif defined(__linux__)
+    return "Linux";
+#elif defined(_WIN32)
+    return "Windows";
+#else
+    return "Unknown";
+#endif
+}
+
 static void print_usage(const char *program_name) {
     printf("Usage: %s [game.lupi | game_directory]\n", program_name);
-    printf("\nLupi Emulator - Run Lupi games on Linux\n");
+    printf("\nLupi Emulator - Run Lupi games on %s\n", host_platform_name());
     printf("\nArguments:\n");
     printf("  game.lupi         Path to a .lupi archive file\n");
     printf("  game_directory    Path to an unpacked game directory\n");

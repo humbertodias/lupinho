@@ -35,6 +35,25 @@ STATIC_LIBS_FLAGS = -Wl,-Bstatic $(RAYLIB_LINUX_STATIC) $(LUA_55_LIB) -Wl,-Bdyna
 # Native (Linux) Source Files
 SRC_NATIVE = main.c ui.c lua_api.c zip.c
 
+# Lua 5.5 sources (used on macOS so we do not reuse the Linux liblua.a)
+# lua.c / luac.c are the standalone interpreter and compiler, not the library.
+LUA_55_DIR = libs/linux/lua-5.5.0/src
+LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c,$(wildcard $(LUA_55_DIR)/*.c))
+
+# macOS Homebrew prefixes (libarchive is keg-only)
+MACOS_INCLUDE = $(LUA_55_INCLUDE) \
+	-I/opt/homebrew/include \
+	-I/opt/homebrew/opt/libarchive/include \
+	-I/usr/local/include \
+	-I/usr/local/opt/libarchive/include
+MACOS_LIBS = \
+	-L/opt/homebrew/lib \
+	-L/opt/homebrew/opt/libarchive/lib \
+	-L/usr/local/lib \
+	-L/usr/local/opt/libarchive/lib \
+	-lraylib -larchive -lm \
+	-framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo
+
 # Compilation Flags
 CFLAGS = -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
 
@@ -82,6 +101,13 @@ web-game: $(SRC)
 linux: $(SRC_NATIVE)
 	$(CC_NATIVE) $(SRC_NATIVE) -o ../dist/lupinho $(NATIVE_INCLUDE) $(CFLAGS) $(NATIVE_LIBS) $(OPTIMIZATION)
 
+# macOS Target (native desktop; compiles Lua for Darwin, does not overwrite Linux liblua.a)
+macos: $(SRC_NATIVE) $(LUA_55_SRC)
+	@mkdir -p ../dist
+	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
+		$(MACOS_INCLUDE) $(CFLAGS) -DLUA_USE_MACOSX \
+		$(MACOS_LIBS) $(OPTIMIZATION)
+
 # Linux Static Target (portable binary with static raylib)
 # Note: Still requires libarchive.so.13 on target system
 static: $(SRC_NATIVE) $(RAYLIB_LINUX_STATIC)
@@ -102,15 +128,17 @@ help:
 	@echo "  make production  - Build for WebAssembly (optimized, no debug)"
 	@echo "  make web-game GAME_PATH=game.lupi - Build for Web with embedded .lupi game (output: dist/webgame/)"
 	@echo "  make linux       - Build for Linux desktop (requires raylib, libarchive)"
+	@echo "  make macos       - Build for macOS desktop (requires raylib, libarchive via Homebrew)"
 	@echo "  make static      - Build portable Linux binary (static raylib + Lua)"
 	@echo "  make clean       - Remove generated files"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  make web         - Emscripten SDK"
 	@echo "  make linux       - pacman: raylib libarchive"
+	@echo "  make macos       - brew install raylib libarchive"
 	@echo "  make static      - pacman: libarchive (raylib statically linked)"
 	@echo ""
 	@echo "Note: For WebAssembly builds, Lua must be compiled with Emscripten."
 	@echo "      If you get linking errors, you may need to compile Lua with emcc."
 
-.PHONY: web production linux static clean help
+.PHONY: web production linux macos static clean help
