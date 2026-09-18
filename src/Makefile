@@ -71,15 +71,25 @@ LUA_LIBRETRO_SRC = \
 	libs/linux/lua-5.5.0/src/lutf8lib.c \
 	libs/linux/lua-5.5.0/src/linit.c
 
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-	LIBRETRO_EXT = dylib
-	LIBRETRO_SOFLAGS = -dynamiclib
-	LIBRETRO_LIBS = -lz -lm
-else
-	LIBRETRO_EXT = so
+# Host OS: native libretro core (.so / .dylib / .dll)
+ifeq ($(OS),Windows_NT)
+	LIBRETRO_EXT = dll
 	LIBRETRO_SOFLAGS = -shared
-	LIBRETRO_LIBS = -lz -lm -ldl
+	LIBRETRO_LIBS = -lz -lm
+	LIBRETRO_LUAFLAGS =
+else
+	UNAME_S := $(shell uname -s)
+	ifeq ($(UNAME_S),Darwin)
+		LIBRETRO_EXT = dylib
+		LIBRETRO_SOFLAGS = -dynamiclib
+		LIBRETRO_LIBS = -lz -lm
+		LIBRETRO_LUAFLAGS = -DLUA_USE_POSIX
+	else
+		LIBRETRO_EXT = so
+		LIBRETRO_SOFLAGS = -shared
+		LIBRETRO_LIBS = -lz -lm -ldl
+		LIBRETRO_LUAFLAGS = -DLUA_USE_POSIX
+	endif
 endif
 
 LIBARCHIVE_CFLAGS := $(shell pkg-config --cflags libarchive 2>/dev/null)
@@ -155,14 +165,26 @@ libretro: $(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC)
 	$(CC_NATIVE) -fPIC $(LIBRETRO_SOFLAGS) -o $(LIBRETRO_OUTPUT) \
 		$(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC) \
 		-I. -Ilibretro $(LUA_55_INCLUDE) \
-		$(CFLAGS) -DLIBRETRO -DLUA_USE_POSIX $(OPTIMIZATION) \
+		$(CFLAGS) -DLIBRETRO $(LIBRETRO_LUAFLAGS) $(OPTIMIZATION) \
 		$(LIBRETRO_LIBS)
+	cp -f libretro/lupinho_libretro.info ../dist/lupinho_libretro.info
+
+# Cross-compile Libretro core for Windows (MinGW-w64, POSIX host).
+# Output: dist/lupinho_libretro.dll
+MINGW_CC ?= x86_64-w64-mingw32-gcc
+libretro-win: $(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC)
+	@mkdir -p ../dist
+	$(MINGW_CC) -shared -o ../dist/lupinho_libretro.dll \
+		$(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC) \
+		-I. -Ilibretro $(LUA_55_INCLUDE) \
+		$(CFLAGS) -DLIBRETRO $(OPTIMIZATION) \
+		-lz -lm -static-libgcc
 	cp -f libretro/lupinho_libretro.info ../dist/lupinho_libretro.info
 
 # Clean generated files
 clean:
 	rm -rf ../dist/webgame/
-	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static $(LIBRETRO_OUTPUT)
+	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static $(LIBRETRO_OUTPUT) ../dist/lupinho_libretro.dll
 
 # Help
 help:
@@ -175,7 +197,8 @@ help:
 	@echo "  make web-game GAME_PATH=game.lupi - Build for Web with embedded .lupi game (output: dist/webgame/)"
 	@echo "  make linux       - Build for Linux desktop (requires raylib, libarchive)"
 	@echo "  make static      - Build portable Linux binary (static raylib + Lua)"
-	@echo "  make libretro    - Build Libretro core (RetroArch): dist/lupinho_libretro.so"
+	@echo "  make libretro    - Build Libretro core for this OS: dist/lupinho_libretro.{so,dylib,dll}"
+	@echo "  make libretro-win - Cross-compile Libretro core for Windows: dist/lupinho_libretro.dll"
 	@echo "  make clean       - Remove generated files"
 	@echo ""
 	@echo "Dependencies:"
@@ -183,8 +206,9 @@ help:
 	@echo "  make linux       - pacman: raylib libarchive"
 	@echo "  make static      - pacman: libarchive (raylib statically linked)"
 	@echo "  make libretro    - zlib"
+	@echo "  make libretro-win - mingw-w64 gcc + mingw zlib (see help)"
 	@echo ""
 	@echo "Note: For WebAssembly builds, Lua must be compiled with Emscripten."
 	@echo "      If you get linking errors, you may need to compile Lua with emcc."
 
-.PHONY: web production linux static libretro clean help
+.PHONY: web production linux static libretro libretro-win clean help

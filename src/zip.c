@@ -3,10 +3,22 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
 #include <stdint.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+#if defined(_WIN32)
+#include <direct.h>
+static int lupi_mkdir(const char *path) { return _mkdir(path); }
+#else
+static int lupi_mkdir(const char *path) { return mkdir(path, 0755); }
+#endif
 
 #ifndef LIBRETRO
 #include <archive.h>
@@ -46,7 +58,7 @@ static int create_parent_directories(const char *filepath) {
         if (*p == '/') {
             *p = '\0';
             if (strlen(path_copy) > 0) {
-                if (mkdir(path_copy, 0755) != 0 && errno != EEXIST) {
+                if (lupi_mkdir(path_copy) != 0 && errno != EEXIST) {
                     free(path_copy);
                     return -1;
                 }
@@ -73,6 +85,33 @@ static int is_path_safe(const char *base_dir, const char *filepath) {
     }
 
     return 1;
+}
+
+static const char *temp_root(void) {
+    const char *p = getenv("TMPDIR");
+    if (p && p[0]) return p;
+    p = getenv("TEMP");
+    if (p && p[0]) return p;
+    p = getenv("TMP");
+    if (p && p[0]) return p;
+    return "/tmp";
+}
+
+static int make_temp_dir(char *out_dir, size_t out_dir_size) {
+    const char *root = temp_root();
+    size_t n = strlen(root);
+    int i;
+
+    while (n > 0 && (root[n - 1] == '/' || root[n - 1] == '\\')) n--;
+
+    for (i = 0; i < 128; i++) {
+        int written = snprintf(out_dir, out_dir_size, "%.*s/lupi-%ld-%d",
+                               (int)n, root, (long)getpid(), i);
+        if (written < 0 || (size_t)written >= out_dir_size) return -1;
+        if (lupi_mkdir(out_dir) == 0) return 0;
+        if (errno != EEXIST) return -1;
+    }
+    return -1;
 }
 
 #ifdef LIBRETRO
@@ -133,8 +172,7 @@ int extract_lupi_to_tmp(const char *lupi_path, char *out_dir, size_t out_dir_siz
     int files_extracted = 0;
     int ret = 0;
 
-    snprintf(out_dir, out_dir_size, "/tmp/lupi-XXXXXX");
-    if (mkdtemp(out_dir) == NULL) {
+    if (make_temp_dir(out_dir, out_dir_size) != 0) {
         fprintf(stderr, "Failed to create temp directory: %s\n", strerror(errno));
         if (zip) fclose(zip);
         return 1;
@@ -195,7 +233,7 @@ int extract_lupi_to_tmp(const char *lupi_path, char *out_dir, size_t out_dir_siz
                      (uncomp_size == 0 && method == 0 && comp_size == 0);
         if (is_dir) {
             if (create_parent_directories(filepath) != 0) ret = 1;
-            mkdir(filepath, 0755);
+            lupi_mkdir(filepath);
             free(name);
             files_extracted++;
             continue;
@@ -259,9 +297,7 @@ int extract_lupi_to_tmp(const char *lupi_path, char *out_dir, size_t out_dir_siz
     int ret = 0;
     int files_extracted = 0;
 
-    // Create temp directory
-    snprintf(out_dir, out_dir_size, "/tmp/lupi-XXXXXX");
-    if (mkdtemp(out_dir) == NULL) {
+    if (make_temp_dir(out_dir, out_dir_size) != 0) {
         fprintf(stderr, "Failed to create temp directory: %s\n", strerror(errno));
         return 1;
     }
@@ -357,11 +393,30 @@ cleanup:
 }
 #endif
 
-void cleanup_lupi_tmp(const char *tmp_dir) {
-    if (!tmp_dir || strlen(tmp_dir) == 0) return;
+static int remove_tree(const char *path) {
+    struct stat st;
+    DIR *dir;
+    struct dirent *ent;
 
-    // Use system rm -rf for cleanup (simple and reliable)
-    char cmd[PATH_MAX + 32];
-    snprintf(cmd, sizeof(cmd), "rm -rf '%s'", tmp_dir);
-    system(cmd);
+    if (stat(path, &st) != 0) return -1;
+
+    if ((st.st_mode & S_IFDIR) == 0) {
+        return unlink(path);
+    }
+
+    dir = opendir(path);
+    if (!dir) return -1;
+    while ((ent = readdir(dir)) != NULL) {
+        char child[PATH_MAX];
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
+        snprintf(child, sizeof(child), "%s/%s", path, ent->d_name);
+        remove_tree(child);
+    }
+    closedir(dir);
+    return rmdir(path);
+}
+
+void cleanup_lupi_tmp(const char *tmp_dir) {
+    if (!tmp_dir || tmp_dir[0] == '\0') return;
+    remove_tree(tmp_dir);
 }
