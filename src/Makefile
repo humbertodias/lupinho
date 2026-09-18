@@ -177,7 +177,7 @@ libretro-win: $(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC)
 	$(MINGW_CC) -shared -o ../dist/lupinho_libretro.dll \
 		$(LIBRETRO_SRC) $(LUA_LIBRETRO_SRC) \
 		-I. -Ilibretro $(LUA_55_INCLUDE) \
-		$(CFLAGS) -DLIBRETRO -DLUA_USE_POSIX $(OPTIMIZATION) \
+		$(CFLAGS) -DLIBRETRO $(OPTIMIZATION) \
 		-lz -lm -static-libgcc
 	cp -f libretro/lupinho_libretro.info ../dist/lupinho_libretro.info
 
