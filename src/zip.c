@@ -13,6 +13,13 @@
 #define PATH_MAX 4096
 #endif
 
+#if defined(_WIN32)
+#include <direct.h>
+static int lupi_mkdir(const char *path) { return _mkdir(path); }
+#else
+static int lupi_mkdir(const char *path) { return mkdir(path, 0755); }
+#endif
+
 #ifndef LIBRETRO
 #include <archive.h>
 #include <archive_entry.h>
@@ -51,7 +58,7 @@ static int create_parent_directories(const char *filepath) {
         if (*p == '/') {
             *p = '\0';
             if (strlen(path_copy) > 0) {
-                if (mkdir(path_copy, 0755) != 0 && errno != EEXIST) {
+                if (lupi_mkdir(path_copy) != 0 && errno != EEXIST) {
                     free(path_copy);
                     return -1;
                 }
@@ -101,7 +108,7 @@ static int make_temp_dir(char *out_dir, size_t out_dir_size) {
         int written = snprintf(out_dir, out_dir_size, "%.*s/lupi-%ld-%d",
                                (int)n, root, (long)getpid(), i);
         if (written < 0 || (size_t)written >= out_dir_size) return -1;
-        if (mkdir(out_dir, 0700) == 0) return 0;
+        if (lupi_mkdir(out_dir) == 0) return 0;
         if (errno != EEXIST) return -1;
     }
     return -1;
@@ -226,7 +233,7 @@ int extract_lupi_to_tmp(const char *lupi_path, char *out_dir, size_t out_dir_siz
                      (uncomp_size == 0 && method == 0 && comp_size == 0);
         if (is_dir) {
             if (create_parent_directories(filepath) != 0) ret = 1;
-            mkdir(filepath, 0755);
+            lupi_mkdir(filepath);
             free(name);
             files_extracted++;
             continue;
