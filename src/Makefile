@@ -52,7 +52,8 @@ MACOS_LIBS = \
 	-L/usr/local/lib \
 	-L/usr/local/opt/libarchive/lib \
 	-lraylib -larchive -lm \
-	-framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo
+	-framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo \
+	-framework CoreAudio -framework AudioToolbox
 
 # Compilation Flags
 CFLAGS = -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
