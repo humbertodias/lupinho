@@ -40,7 +40,8 @@ LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c,$(wildcard $(
 
 # Native (Linux) Libraries — raylib is built from vendored sources
 NATIVE_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
-NATIVE_LIBS = $(RAYLIB_LINUX_LIB) -lGL -lm -lpthread -ldl -lrt -lX11 -lXcursor -lXinerama -lXrandr -lXi -lz
+NATIVE_LIBS = -Wl,--whole-archive $(RAYLIB_LINUX_LIB) -Wl,--no-whole-archive \
+	-lGL -lm -lpthread -ldl -lrt -lX11 -lXcursor -lXinerama -lXrandr -lXi -lz
 
 # Native (Linux / macOS / Windows) Source Files
 SRC_NATIVE = main.c ui.c lua_api.c zip.c
@@ -57,7 +58,8 @@ MACOS_LIBS = \
 
 # Windows MinGW
 WIN_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
-WIN_LIBS = $(RAYLIB_WIN_LIB) -lopengl32 -lgdi32 -lwinmm -lz -pthread -static-libgcc
+WIN_LIBS = -Wl,--whole-archive $(RAYLIB_WIN_LIB) -Wl,--no-whole-archive \
+	-lopengl32 -lgdi32 -lwinmm -lz -pthread -static-libgcc
 WIN_CFLAGS = $(CFLAGS) -D_WIN32_WINNT=0x0601
 
 # Compilation Flags
