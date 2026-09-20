@@ -22,5 +22,5 @@ ENV LD_LIBRARY_PATH="/osxcross/lib"
 WORKDIR /work
 COPY . /work/
 RUN patch -d /work/src/libs/linux/lua-5.5.1 -p1 \
-    < /work/src/libs/linux/lua-5.5.1-binary-literals.patch
+    < /work/src/libs/lua-5.5.1-binary-literals.patch
 RUN make -C /work/src macos

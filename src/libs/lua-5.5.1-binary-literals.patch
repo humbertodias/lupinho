@@ -1,5 +1,5 @@
 This patch adds 0b/0B integer literals to Lua 5.5.1 (not in upstream).
-Apply from the lua-5.5.1 directory: patch -p1 < lua-5.5.1-binary-literals.patch
+Apply from src/libs/linux/lua-5.5.1: patch -p1 < ../lua-5.5.1-binary-literals.patch
 Lupi games use values like 0b10101010 for bitmasks.
 
 --- a/src/llex.c
