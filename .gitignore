@@ -5,3 +5,5 @@ site/dist/*
 !site/dist/.keep
 .DS_Store
 *.o
+*.exe
+src/libs/windows/

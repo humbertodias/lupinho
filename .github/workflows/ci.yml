@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+            target: linux
+            artifact: lupinho
+          - name: macos
+            os: macos-latest
+            target: macos
+            artifact: lupinho*
+          - name: windows
+            os: ubuntu-latest
+            target: windows
+            artifact: lupinho.exe
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux deps
+        if: matrix.name == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev libraylib-dev
+
+      - name: Install macOS deps
+        if: matrix.name == 'macos'
+        run: brew install raylib
+
+      - name: Install MinGW (Windows)
+        if: matrix.name == 'windows'
+        run: sudo apt-get update && sudo apt-get install -y make gcc-mingw-w64-x86-64 libz-mingw-w64-dev
+
+      - name: Build
+        working-directory: src
+        run: make ${{ matrix.target }}
+
+      - name: Upload core
+        uses: actions/upload-artifact@v7
+        with:
+          name: lupinho-libretro-${{ matrix.name }}
+          path: |
+            dist/${{ matrix.artifact }}
+          if-no-files-found: error

@@ -1,8 +1,17 @@
 # Emscripten Compiler
 CC = emcc
 
-# Native Compiler (Linux)
+# Native Compiler (Linux / macOS)
 CC_NATIVE = gcc
+
+# MinGW (native gcc on Windows, cross-compiler elsewhere)
+ifeq ($(OS),Windows_NT)
+CC_MINGW ?= gcc
+AR_MINGW ?= ar
+else
+CC_MINGW ?= x86_64-w64-mingw32-gcc
+AR_MINGW ?= x86_64-w64-mingw32-ar
+endif
 
 # Source Files
 SRC = main.c ui.c lua_api.c
@@ -14,45 +23,44 @@ OUTPUT = ../dist/game.html
 RAYLIB_SRC = libs/web/raylib-web
 RAYLIB_INCLUDE = -Ilibs/web/raylib-web
 RAYLIB_LIB = libs/web/raylib-web/libraylib.web.a
+RAYLIB_WIN_DIR = libs/windows
+RAYLIB_WIN_LIB = $(RAYLIB_WIN_DIR)/libraylib.a
 
 # Lua Configuration
 LUA_WEB_INCLUDE = -Ilibs/web/lua-web
 LUA_WEB_LIB = libs/web/lua-web/liblua.web.a
 
-# Lua 5.5.0 (compiled with binary literal support)
-LUA_55_INCLUDE = -Ilibs/linux/lua-5.5.0/src
-LUA_55_LIB = libs/linux/lua-5.5.0/src/liblua.a
+# Lua 5.5.1 (compiled from source on each native target)
+LUA_55_INCLUDE = -Ilibs/linux/lua-5.5.1/src
+LUA_55_DIR = libs/linux/lua-5.5.1/src
+# lua.c / luac.c are the standalone interpreter and compiler, not the library.
+LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c,$(wildcard $(LUA_55_DIR)/*.c))
 
 # Native (Linux) Libraries
-NATIVE_LIBS = -lraylib $(LUA_55_LIB) -lm -ldl -lpthread -lX11 -larchive
+NATIVE_LIBS = -lraylib -lm -ldl -lpthread -lX11 -lz
 NATIVE_INCLUDE = $(LUA_55_INCLUDE)
 
 # Native (Linux) Static Libraries
 RAYLIB_LINUX_STATIC = libs/linux/raylib/src/libraylib.a
-STATIC_LIBS = $(RAYLIB_LINUX_STATIC) $(LUA_55_LIB)
-STATIC_LIBS_FLAGS = -Wl,-Bstatic $(RAYLIB_LINUX_STATIC) $(LUA_55_LIB) -Wl,-Bdynamic -lm -ldl -lpthread -lX11 -larchive
+STATIC_LIBS_FLAGS = -Wl,-Bstatic $(RAYLIB_LINUX_STATIC) -Wl,-Bdynamic -lm -ldl -lpthread -lX11 -lz
 
-# Native (Linux) Source Files
+# Native (Linux / macOS / Windows) Source Files
 SRC_NATIVE = main.c ui.c lua_api.c zip.c
 
-# Lua 5.5 sources (used on macOS so we do not reuse the Linux liblua.a)
-# lua.c / luac.c are the standalone interpreter and compiler, not the library.
-LUA_55_DIR = libs/linux/lua-5.5.0/src
-LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c,$(wildcard $(LUA_55_DIR)/*.c))
-
-# macOS Homebrew prefixes (libarchive is keg-only)
+# macOS Homebrew prefixes
 MACOS_INCLUDE = $(LUA_55_INCLUDE) \
 	-I/opt/homebrew/include \
-	-I/opt/homebrew/opt/libarchive/include \
-	-I/usr/local/include \
-	-I/usr/local/opt/libarchive/include
+	-I/usr/local/include
 MACOS_LIBS = \
 	-L/opt/homebrew/lib \
-	-L/opt/homebrew/opt/libarchive/lib \
 	-L/usr/local/lib \
-	-L/usr/local/opt/libarchive/lib \
-	-lraylib -larchive -lm \
+	-lraylib -lz -lm \
 	-framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo
+
+# Windows MinGW
+WIN_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
+WIN_LIBS = $(RAYLIB_WIN_LIB) -lopengl32 -lgdi32 -lwinmm -lz -pthread -static-libgcc
+WIN_CFLAGS = $(CFLAGS) -D_WIN32_WINNT=0x0601
 
 # Compilation Flags
 CFLAGS = -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
@@ -98,10 +106,13 @@ web-game: $(SRC)
 	@echo "Build complete! Output in ../dist/webgame/"
 
 # Linux Target (native desktop)
-linux: $(SRC_NATIVE)
-	$(CC_NATIVE) $(SRC_NATIVE) -o ../dist/lupinho $(NATIVE_INCLUDE) $(CFLAGS) $(NATIVE_LIBS) $(OPTIMIZATION)
+linux: $(SRC_NATIVE) $(LUA_55_SRC)
+	@mkdir -p ../dist
+	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
+		$(NATIVE_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
+		$(NATIVE_LIBS) $(OPTIMIZATION)
 
-# macOS Target (native desktop; compiles Lua for Darwin, does not overwrite Linux liblua.a)
+# macOS Target (native desktop; compiles Lua for Darwin)
 macos: $(SRC_NATIVE) $(LUA_55_SRC)
 	@mkdir -p ../dist
 	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
@@ -109,14 +120,36 @@ macos: $(SRC_NATIVE) $(LUA_55_SRC)
 		$(MACOS_LIBS) $(OPTIMIZATION)
 
 # Linux Static Target (portable binary with static raylib)
-# Note: Still requires libarchive.so.13 on target system
-static: $(SRC_NATIVE) $(RAYLIB_LINUX_STATIC)
-	$(CC_NATIVE) $(SRC_NATIVE) -o ../dist/lupinho-static $(NATIVE_INCLUDE) $(CFLAGS) $(STATIC_LIBS_FLAGS) $(OPTIMIZATION) -s
+static: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_LINUX_STATIC)
+	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho-static \
+		$(NATIVE_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
+		$(STATIC_LIBS_FLAGS) $(OPTIMIZATION) -s
+
+# Raylib static library for Windows (MinGW)
+$(RAYLIB_WIN_LIB):
+	@mkdir -p $(RAYLIB_WIN_DIR)
+	$(MAKE) -C $(RAYLIB_SRC) raylib \
+		OS=Windows_NT \
+		PLATFORM_SHELL=sh \
+		PLATFORM=PLATFORM_DESKTOP \
+		RAYLIB_LIBTYPE=STATIC \
+		CC="$(CC_MINGW)" \
+		AR="$(AR_MINGW)" \
+		RAYLIB_SRC_PATH=. \
+		RAYLIB_RELEASE_PATH="$(CURDIR)/$(RAYLIB_WIN_DIR)"
+
+# Windows Target (MinGW desktop, cross-compile from Linux/macOS or native MinGW)
+windows: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_LIB)
+	@mkdir -p ../dist
+	$(CC_MINGW) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho.exe \
+		$(WIN_INCLUDE) $(WIN_CFLAGS) $(OPTIMIZATION) \
+		$(WIN_LIBS)
 
 # Clean generated files
 clean:
 	rm -rf ../dist/webgame/
-	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static
+	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static ../dist/lupinho.exe
+	rm -f $(RAYLIB_WIN_LIB) $(RAYLIB_SRC)/*.o
 
 # Help
 help:
@@ -127,18 +160,20 @@ help:
 	@echo "  make web         - Build for WebAssembly (development mode with debug)"
 	@echo "  make production  - Build for WebAssembly (optimized, no debug)"
 	@echo "  make web-game GAME_PATH=game.lupi - Build for Web with embedded .lupi game (output: dist/webgame/)"
-	@echo "  make linux       - Build for Linux desktop (requires raylib, libarchive)"
-	@echo "  make macos       - Build for macOS desktop (requires raylib, libarchive via Homebrew)"
+	@echo "  make linux       - Build for Linux desktop (requires raylib, zlib)"
+	@echo "  make macos       - Build for macOS desktop (requires raylib via Homebrew)"
+	@echo "  make windows     - Build lupinho.exe with MinGW (cross or native)"
 	@echo "  make static      - Build portable Linux binary (static raylib + Lua)"
 	@echo "  make clean       - Remove generated files"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  make web         - Emscripten SDK"
-	@echo "  make linux       - pacman: raylib libarchive"
-	@echo "  make macos       - brew install raylib libarchive"
-	@echo "  make static      - pacman: libarchive (raylib statically linked)"
+	@echo "  make linux       - pacman: raylib zlib"
+	@echo "  make macos       - brew install raylib"
+	@echo "  make windows     - MinGW-w64 gcc (x86_64-w64-mingw32-gcc) and zlib"
+	@echo "  make static      - pacman: zlib (raylib statically linked)"
 	@echo ""
 	@echo "Note: For WebAssembly builds, Lua must be compiled with Emscripten."
 	@echo "      If you get linking errors, you may need to compile Lua with emcc."
 
-.PHONY: web production linux macos static clean help
+.PHONY: web production linux macos windows static clean help
