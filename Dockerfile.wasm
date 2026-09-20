@@ -1,0 +1,13 @@
+FROM emscripten/emsdk:latest
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    patch \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /work
+COPY . /work/
+RUN patch -d /work/src/libs/linux/lua-5.5.1 -p1 \
+    < /work/src/libs/lua-5.5.1-binary-literals.patch
+RUN make -C /work/src web

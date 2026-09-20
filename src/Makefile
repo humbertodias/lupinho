@@ -31,7 +31,6 @@ OUTPUT = ../dist/game.html
 # Raylib Directories
 RAYLIB_SRC = libs/web/raylib-web
 RAYLIB_INCLUDE = -Ilibs/web/raylib-web
-RAYLIB_LIB = libs/web/raylib-web/libraylib.web.a
 RAYLIB_WIN_DIR = libs/windows
 RAYLIB_LINUX_DIR = libs/linux/raylib
 RAYLIB_MACOS_DIR = libs/macos
@@ -41,15 +40,17 @@ RAYLIB_MODULES = rcore rshapes rtextures rtext utils rglfw rmodels raudio
 RAYLIB_LINUX_OBJS = $(addprefix $(RAYLIB_LINUX_DIR)/,$(addsuffix .o,$(RAYLIB_MODULES)))
 RAYLIB_WIN_OBJS = $(addprefix $(RAYLIB_WIN_DIR)/,$(addsuffix .o,$(RAYLIB_MODULES)))
 RAYLIB_MACOS_OBJS = $(addprefix $(RAYLIB_MACOS_ARCH_DIR)/,$(addsuffix .o,$(RAYLIB_MODULES)))
+RAYLIB_WEB_OBJDIR = libs/web/raylib-build
+RAYLIB_WEB_MODULES = rcore rshapes rtextures rtext utils rmodels raudio
+RAYLIB_WEB_OBJS = $(addprefix $(RAYLIB_WEB_OBJDIR)/,$(addsuffix .o,$(RAYLIB_WEB_MODULES)))
+RAYLIB_WEB_CFLAGS = -std=gnu99 -D_GNU_SOURCE -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2 \
+	-Wno-missing-braces -Werror=pointer-arith -fno-strict-aliasing -Os \
+	-I$(RAYLIB_SRC) -I$(RAYLIB_SRC)/external/glfw/include
 RAYLIB_CFLAGS = -std=c99 -D_GNU_SOURCE -DPLATFORM_DESKTOP_GLFW -DGRAPHICS_API_OPENGL_33 \
 	-Wno-missing-braces -Werror=pointer-arith -fno-strict-aliasing -O1 \
 	-I$(RAYLIB_SRC) -I$(RAYLIB_SRC)/external/glfw/include
 
-# Lua Configuration
-LUA_WEB_INCLUDE = -Ilibs/web/lua-web
-LUA_WEB_LIB = libs/web/lua-web/liblua.web.a
-
-# Lua 5.5.1 (compiled from source on each native target)
+# Lua 5.5.1 (compiled from source on each target)
 LUA_55_INCLUDE = -Ilibs/linux/lua-5.5.1/src
 LUA_55_DIR = libs/linux/lua-5.5.1/src
 # lua.c / luac.c are the standalone interpreter and compiler, not the library.
@@ -97,16 +98,25 @@ OPTIMIZATION = -O2
 DEBUG_FLAGS = -DDEBUG_MODE
 PROD_FLAGS = -O3 -s ASSERTIONS=0 -s DISABLE_EXCEPTION_CATCHING=1 -s ELIMINATE_DUPLICATE_FUNCTIONS=1 -DPRODUCTION
 
+# Web (Lua 5.5.1 + vendored raylib, compiled with emcc)
+$(RAYLIB_WEB_OBJDIR)/%.o: $(RAYLIB_SRC)/%.c
+	@mkdir -p $(RAYLIB_WEB_OBJDIR)
+	$(CC) -c $< -o $@ $(RAYLIB_WEB_CFLAGS)
+
 # Web Target (development with debug)
-web: $(SRC)
-	$(CC) $(SRC) -o $(OUTPUT) $(RAYLIB_INCLUDE) $(LUA_WEB_INCLUDE) $(CFLAGS) $(EMFLAGS) $(OPTIMIZATION) $(LUA_WEB_LIB) $(RAYLIB_LIB)
+web: $(SRC) $(LUA_55_SRC) $(RAYLIB_WEB_OBJS)
+	@mkdir -p ../dist
+	$(CC) $(SRC) $(LUA_55_SRC) $(RAYLIB_WEB_OBJS) -o $(OUTPUT) \
+		$(LUA_55_INCLUDE) $(RAYLIB_INCLUDE) $(CFLAGS) $(EMFLAGS) $(OPTIMIZATION) $(DEBUG_FLAGS)
 
 # Production Target (optimized, no debug)
-production: $(SRC)
-	$(CC) $(SRC) -o $(OUTPUT) $(RAYLIB_INCLUDE) $(LUA_WEB_INCLUDE) $(CFLAGS) $(EMFLAGS) $(PROD_FLAGS) $(LUA_WEB_LIB) $(RAYLIB_LIB)
+production: $(SRC) $(LUA_55_SRC) $(RAYLIB_WEB_OBJS)
+	@mkdir -p ../dist
+	$(CC) $(SRC) $(LUA_55_SRC) $(RAYLIB_WEB_OBJS) -o $(OUTPUT) \
+		$(LUA_55_INCLUDE) $(RAYLIB_INCLUDE) $(CFLAGS) $(EMFLAGS) $(PROD_FLAGS)
 
 # Web Game Target (embed .lupi file)
-web-game: $(SRC)
+web-game: $(SRC) $(LUA_55_SRC) $(RAYLIB_WEB_OBJS)
 	@if [ -z "$(GAME_PATH)" ]; then echo "Error: GAME_PATH is required. Usage: make web-game GAME_PATH=game.lupi"; exit 1; fi
 	@echo "Extracting $(GAME_PATH)..."
 	@rm -rf /tmp/lupi-web-game
@@ -114,7 +124,9 @@ web-game: $(SRC)
 	@unzip -q "$(GAME_PATH)" -d /tmp/lupi-web-game -x "*.git*" "*.lupi"
 	@echo "Building with embedded game..."
 	@mkdir -p ../dist/webgame
-	$(CC) $(SRC) -o ../dist/webgame/game.html $(RAYLIB_INCLUDE) $(LUA_WEB_INCLUDE) $(CFLAGS) $(EMFLAGS) $(OPTIMIZATION) -DAUTO_LOAD_GAME $(LUA_WEB_LIB) $(RAYLIB_LIB) --preload-file /tmp/lupi-web-game@/loaded_game
+	$(CC) $(SRC) $(LUA_55_SRC) $(RAYLIB_WEB_OBJS) -o ../dist/webgame/game.html \
+		$(LUA_55_INCLUDE) $(RAYLIB_INCLUDE) $(CFLAGS) $(EMFLAGS) $(OPTIMIZATION) -DAUTO_LOAD_GAME \
+		--preload-file /tmp/lupi-web-game@/loaded_game
 	@echo "Build complete! Output in ../dist/webgame/"
 
 # Raylib objects for Linux (compiled into a dedicated dir so they stay ELF)
@@ -189,7 +201,7 @@ windows: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_OBJS)
 
 # Docker SDK: `make docker.linux`, `make docker.macos`, `make docker.windows`
 # Explicit names: BSD make (macOS /usr/bin/make) has no `%` pattern rules.
-docker.linux docker.macos docker.windows:
+docker.linux docker.macos docker.windows docker.wasm:
 	@set -e; \
 	platform=`echo $@ | sed 's/^docker.//'`; \
 	test -f ../Dockerfile.$$platform || { echo "Unknown platform: $$platform (missing Dockerfile.$$platform)"; exit 1; }; \
@@ -203,9 +215,9 @@ docker.linux docker.macos docker.windows:
 
 # Clean generated files
 clean:
-	rm -rf ../dist/webgame/ $(RAYLIB_MACOS_DIR)
-	rm -f $(OUTPUT) game.js game.wasm lupi_emulator \
-		../dist/lupinho ../dist/lupinho-static ../dist/lupinho.exe \
+	rm -rf ../dist/webgame/ $(RAYLIB_MACOS_DIR) $(RAYLIB_WEB_OBJDIR)
+	rm -f $(OUTPUT) ../dist/game.js ../dist/game.wasm ../dist/game.data \
+		lupi_emulator ../dist/lupinho ../dist/lupinho-static ../dist/lupinho.exe \
 		../dist/lupinho-x86_64 ../dist/lupinho-arm64
 	rm -f $(RAYLIB_LINUX_OBJS) $(RAYLIB_WIN_OBJS) \
 		$(RAYLIB_LINUX_DIR)/libraylib.a $(RAYLIB_WIN_DIR)/libraylib.a
@@ -222,7 +234,7 @@ help:
 	@echo "  make linux       - Build for Linux desktop (vendored raylib + Lua)"
 	@echo "  make macos       - Build macOS x86_64 + arm64 (and universal lupinho if lipo exists)"
 	@echo "  make windows     - Build lupinho.exe with MinGW (cross or native)"
-	@echo "  make docker.PLATFORM - Build via Dockerfile.PLATFORM (linux, macos, windows)"
+	@echo "  make docker.PLATFORM - Build via Dockerfile.PLATFORM (linux, macos, windows, wasm)"
 	@echo "  make static      - Alias of linux with stripped binary"
 	@echo "  make clean       - Remove generated files"
 	@echo ""
@@ -231,10 +243,10 @@ help:
 	@echo "  make linux       - gcc, zlib, X11, OpenGL"
 	@echo "  make macos       - osxcross o64-clang + oa64-clang, or Xcode clang -arch; vendored raylib"
 	@echo "  make windows     - MinGW-w64 gcc (x86_64-w64-mingw32-gcc) and zlib"
-	@echo "  make docker.*    - Docker Engine (Dockerfile.linux / .macos / .windows)"
+	@echo "  make docker.*    - Docker Engine (Dockerfile.linux / .macos / .windows / .wasm)"
 	@echo "  make static      - same as linux"
 	@echo ""
 	@echo "Note: For WebAssembly builds, Lua must be compiled with Emscripten."
 	@echo "      If you get linking errors, you may need to compile Lua with emcc."
 
-.PHONY: web production linux macos macos-arch macos-x86_64 macos-arm64 macos-universal windows docker.linux docker.macos docker.windows static clean help
+.PHONY: web production linux macos macos-arch macos-x86_64 macos-arm64 macos-universal windows docker.linux docker.macos docker.windows docker.wasm static clean help

@@ -8,5 +8,6 @@ site/dist/*
 *.exe
 src/libs/windows/
 src/libs/macos/
+src/libs/web/raylib-build/
 src/libs/linux/raylib/*.a
 src/libs/linux/raylib/*.o
