@@ -1,0 +1,12 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    make \
+    gcc-mingw-w64-x86-64 \
+    libz-mingw-w64-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /work

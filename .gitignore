@@ -8,3 +8,4 @@ site/dist/*
 *.exe
 src/libs/windows/
 src/libs/linux/raylib/*.a
+src/libs/linux/raylib/*.o

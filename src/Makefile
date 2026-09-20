@@ -24,9 +24,13 @@ RAYLIB_SRC = libs/web/raylib-web
 RAYLIB_INCLUDE = -Ilibs/web/raylib-web
 RAYLIB_LIB = libs/web/raylib-web/libraylib.web.a
 RAYLIB_WIN_DIR = libs/windows
-RAYLIB_WIN_LIB = $(RAYLIB_WIN_DIR)/libraylib.a
 RAYLIB_LINUX_DIR = libs/linux/raylib
-RAYLIB_LINUX_LIB = $(RAYLIB_LINUX_DIR)/libraylib.a
+RAYLIB_MODULES = rcore rshapes rtextures rtext utils rglfw rmodels raudio
+RAYLIB_LINUX_OBJS = $(addprefix $(RAYLIB_LINUX_DIR)/,$(addsuffix .o,$(RAYLIB_MODULES)))
+RAYLIB_WIN_OBJS = $(addprefix $(RAYLIB_WIN_DIR)/,$(addsuffix .o,$(RAYLIB_MODULES)))
+RAYLIB_CFLAGS = -std=c99 -D_GNU_SOURCE -DPLATFORM_DESKTOP_GLFW -DGRAPHICS_API_OPENGL_33 \
+	-Wno-missing-braces -Werror=pointer-arith -fno-strict-aliasing -O1 \
+	-I$(RAYLIB_SRC) -I$(RAYLIB_SRC)/external/glfw/include
 
 # Lua Configuration
 LUA_WEB_INCLUDE = -Ilibs/web/lua-web
@@ -38,10 +42,9 @@ LUA_55_DIR = libs/linux/lua-5.5.1/src
 # lua.c / luac.c are the standalone interpreter and compiler, not the library.
 LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c,$(wildcard $(LUA_55_DIR)/*.c))
 
-# Native (Linux) Libraries — raylib is built from vendored sources
+# Native (Linux) Libraries — raylib objects built from vendored sources
 NATIVE_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
-NATIVE_LIBS = -Wl,--whole-archive $(RAYLIB_LINUX_LIB) -Wl,--no-whole-archive \
-	-lGL -lm -lpthread -ldl -lrt -lX11 -lXcursor -lXinerama -lXrandr -lXi -lz
+NATIVE_LIBS = $(RAYLIB_LINUX_OBJS) -lGL -lm -lpthread -ldl -lrt -lX11 -lXcursor -lXinerama -lXrandr -lXi -lz
 
 # Native (Linux / macOS / Windows) Source Files
 SRC_NATIVE = main.c ui.c lua_api.c zip.c
@@ -58,8 +61,7 @@ MACOS_LIBS = \
 
 # Windows MinGW
 WIN_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
-WIN_LIBS = -Wl,--whole-archive $(RAYLIB_WIN_LIB) -Wl,--no-whole-archive \
-	-lopengl32 -lgdi32 -lwinmm -lz -pthread -static-libgcc
+WIN_LIBS = $(RAYLIB_WIN_OBJS) -lopengl32 -lgdi32 -lwinmm -lz -pthread -static-libgcc
 WIN_CFLAGS = $(CFLAGS) -D_WIN32_WINNT=0x0601
 
 # Compilation Flags
@@ -105,17 +107,17 @@ web-game: $(SRC)
 	$(CC) $(SRC) -o ../dist/webgame/game.html $(RAYLIB_INCLUDE) $(LUA_WEB_INCLUDE) $(CFLAGS) $(EMFLAGS) $(OPTIMIZATION) -DAUTO_LOAD_GAME $(LUA_WEB_LIB) $(RAYLIB_LIB) --preload-file /tmp/lupi-web-game@/loaded_game
 	@echo "Build complete! Output in ../dist/webgame/"
 
-# Raylib static library for Linux
-$(RAYLIB_LINUX_LIB):
+# Raylib objects for Linux (compiled into a dedicated dir so they stay ELF)
+$(RAYLIB_LINUX_DIR)/%.o: $(RAYLIB_SRC)/%.c
 	@mkdir -p $(RAYLIB_LINUX_DIR)
-	$(MAKE) -C $(RAYLIB_SRC) raylib \
-		PLATFORM=PLATFORM_DESKTOP \
-		RAYLIB_LIBTYPE=STATIC \
-		RAYLIB_SRC_PATH=. \
-		RAYLIB_RELEASE_PATH="$(CURDIR)/$(RAYLIB_LINUX_DIR)"
+	$(CC_NATIVE) -c $< -o $@ $(RAYLIB_CFLAGS) -D_GLFW_X11 -fPIC
+
+$(RAYLIB_LINUX_DIR)/rglfw.o: $(RAYLIB_SRC)/rglfw.c
+	@mkdir -p $(RAYLIB_LINUX_DIR)
+	$(CC_NATIVE) -c $< -o $@ $(RAYLIB_CFLAGS) -D_GLFW_X11 -fPIC -U_GNU_SOURCE
 
 # Linux Target (native desktop)
-linux: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_LINUX_LIB)
+linux: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_LINUX_OBJS)
 	@mkdir -p ../dist
 	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
 		$(NATIVE_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
@@ -133,23 +135,19 @@ static: linux
 	@cp ../dist/lupinho ../dist/lupinho-static
 	strip ../dist/lupinho-static
 
-# Raylib static library for Windows (MinGW)
-$(RAYLIB_WIN_LIB):
+# Raylib objects for Windows (MinGW COFF, kept out of the Linux object dir)
+$(RAYLIB_WIN_DIR)/%.o: $(RAYLIB_SRC)/%.c
 	@mkdir -p $(RAYLIB_WIN_DIR)
-	$(MAKE) -C $(RAYLIB_SRC) raylib \
-		OS=Windows_NT \
-		PLATFORM_SHELL=sh \
-		PLATFORM=PLATFORM_DESKTOP \
-		RAYLIB_LIBTYPE=STATIC \
-		CC="$(CC_MINGW)" \
-		AR="$(AR_MINGW)" \
-		RAYLIB_SRC_PATH=. \
-		RAYLIB_RELEASE_PATH="$(CURDIR)/$(RAYLIB_WIN_DIR)"
+	$(CC_MINGW) -c $< -o $@ $(RAYLIB_CFLAGS) -DUNICODE -D_WIN32_WINNT=0x0601
+
+$(RAYLIB_WIN_DIR)/rglfw.o: $(RAYLIB_SRC)/rglfw.c
+	@mkdir -p $(RAYLIB_WIN_DIR)
+	$(CC_MINGW) -c $< -o $@ $(RAYLIB_CFLAGS) -DUNICODE -D_WIN32_WINNT=0x0601 -U_GNU_SOURCE
 
 # Windows Target (MinGW desktop, cross-compile from Linux/macOS or native MinGW)
-windows: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_LIB)
+windows: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_OBJS)
 	@mkdir -p ../dist
-	$(CC_MINGW) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho.exe \
+	$(CC_MINGW) $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_OBJS) -o ../dist/lupinho.exe \
 		$(WIN_INCLUDE) $(WIN_CFLAGS) $(OPTIMIZATION) \
 		$(WIN_LIBS)
 
@@ -157,7 +155,7 @@ windows: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_LIB)
 clean:
 	rm -rf ../dist/webgame/
 	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static ../dist/lupinho.exe
-	rm -f $(RAYLIB_WIN_LIB) $(RAYLIB_LINUX_LIB) $(RAYLIB_SRC)/*.o
+	rm -f $(RAYLIB_LINUX_OBJS) $(RAYLIB_WIN_OBJS) $(RAYLIB_LINUX_DIR)/libraylib.a $(RAYLIB_WIN_DIR)/libraylib.a
 
 # Help
 help:

@@ -1,0 +1,8 @@
+# Native macOS deps for `make macos`.
+# GitHub-hosted macOS runners cannot run a macOS OS in Docker, so ci.yml
+# executes the `brew install` line on macos-latest.
+FROM ghcr.io/homebrew/ubuntu24.04:latest
+
+RUN brew install raylib
+
+WORKDIR /work

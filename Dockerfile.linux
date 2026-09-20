@@ -1,5 +1,6 @@
 FROM debian:bookworm-slim
 
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /lupinho
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,6 +20,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     ca-certificates \
     xz-utils \
+    zlib1g-dev \
+    libgl1-mesa-dev \
+    libx11-dev \
+    libxcursor-dev \
+    libxinerama-dev \
+    libxrandr-dev \
+    libxi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Emscripten

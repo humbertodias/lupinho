@@ -14,33 +14,40 @@ jobs:
         include:
           - name: linux
             os: ubuntu-latest
+            dockerfile: Dockerfile.linux
+            workdir: /lupinho
             target: linux
             artifact: lupinho
           - name: macos
             os: macos-latest
+            dockerfile: Dockerfile.macos
             target: macos
             artifact: lupinho*
           - name: windows
             os: ubuntu-latest
+            dockerfile: Dockerfile.windows
+            workdir: /work
             target: windows
             artifact: lupinho.exe
 
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Linux deps
-        if: matrix.name == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev libgl1-mesa-dev libx11-dev libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev
+      - name: Build toolchain image
+        if: runner.os == 'Linux'
+        run: docker build -f ${{ matrix.dockerfile }} -t lupinho-ci .
+
+      - name: Build in container
+        if: runner.os == 'Linux'
+        run: docker run --rm -v "$PWD":${{ matrix.workdir }} -w ${{ matrix.workdir }}/src lupinho-ci make ${{ matrix.target }}
 
       - name: Install macOS deps
-        if: matrix.name == 'macos'
-        run: brew install raylib
+        if: runner.os == 'macOS'
+        run: |
+          sed -n 's/^RUN brew install //p' "${{ matrix.dockerfile }}" | xargs brew install
 
-      - name: Install MinGW (Windows)
-        if: matrix.name == 'windows'
-        run: sudo apt-get update && sudo apt-get install -y make gcc-mingw-w64-x86-64 libz-mingw-w64-dev
-
-      - name: Build
+      - name: Build on macOS
+        if: runner.os == 'macOS'
         working-directory: src
         run: make ${{ matrix.target }}
 
