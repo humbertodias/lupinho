@@ -147,7 +147,7 @@ $(RAYLIB_WIN_DIR)/rglfw.o: $(RAYLIB_SRC)/rglfw.c
 # Windows Target (MinGW desktop, cross-compile from Linux/macOS or native MinGW)
 windows: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_OBJS)
 	@mkdir -p ../dist
-	$(CC_MINGW) $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_OBJS) -o ../dist/lupinho.exe \
+	$(CC_MINGW) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho.exe \
 		$(WIN_INCLUDE) $(WIN_CFLAGS) $(OPTIMIZATION) \
 		$(WIN_LIBS)
 
