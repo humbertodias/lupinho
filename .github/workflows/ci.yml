@@ -17,7 +17,7 @@ jobs:
             artifact: lupinho
           - name: macos
             os: ubuntu-latest
-            artifact: lupinho
+            artifact: lupinho*
           - name: windows
             os: ubuntu-latest
             artifact: lupinho.exe
