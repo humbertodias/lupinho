@@ -27,6 +27,7 @@ void UpdateDrawFrame() {
     if (game_is_loading) return;
 #endif
     lua_api_call_update();
+    lua_api_audio_update();
 
     BeginDrawing();
 
@@ -105,16 +106,16 @@ static int ends_with(const char *str, const char *suffix) {
 int main() {
     lua_api_init();
 
-#if defined(AUTO_LOAD_GAME)
-    lua_api_setup_game("/loaded_game");
-#endif
-
 #ifndef DEBUG_MODE
     SetTraceLogLevel(LOG_WARNING);
 #endif
 
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Lupi Emulator");
     SetTargetFPS(60);
+
+#if defined(AUTO_LOAD_GAME)
+    lua_api_setup_game("/loaded_game");
+#endif
 
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 
@@ -165,15 +166,14 @@ int main(int argc, char *argv[]) {
     // Initialize Lua
     lua_api_init();
 
-    // Set up the game
-    lua_api_setup_game(game_dir);
-
-    // Initialize Raylib window
+    // Audio/window backends need a live display before sfx.* can open the device
 #ifndef DEBUG_MODE
     SetTraceLogLevel(LOG_WARNING);
 #endif
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Lupi Emulator");
     SetTargetFPS(60);
+
+    lua_api_setup_game(game_dir);
 
     while (!WindowShouldClose())
     {

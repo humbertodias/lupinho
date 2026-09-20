@@ -58,7 +58,7 @@ LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c $(LUA_55_DIR)
 
 # Native (Linux) Libraries — raylib objects built from vendored sources
 NATIVE_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
-NATIVE_LIBS = $(RAYLIB_LINUX_OBJS) -lGL -lm -lpthread -ldl -lrt -lX11 -lXcursor -lXinerama -lXrandr -lXi -lz
+NATIVE_LIBS = $(RAYLIB_LINUX_OBJS) -lGL -lm -lpthread -ldl -lrt -lX11 -lXcursor -lXinerama -lXrandr -lXi -lz -latomic
 
 # Native (Linux / macOS / Windows) Source Files
 SRC_NATIVE = main.c ui.c lua_api.c zip.c
@@ -67,12 +67,12 @@ SRC_NATIVE = main.c ui.c lua_api.c zip.c
 MACOS_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
 MACOS_LIBS = $(RAYLIB_MACOS_OBJS) -lz -lm \
 	-framework OpenGL -framework Cocoa -framework IOKit \
-	-framework CoreAudio -framework CoreVideo
+	-framework CoreAudio -framework CoreVideo -framework AudioToolbox
 CC_OSX ?= $(CC_OSX_X86)
 
 # Windows MinGW
 WIN_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
-WIN_LIBS = $(RAYLIB_WIN_OBJS) -lopengl32 -lgdi32 -lwinmm -lz -pthread -static-libgcc
+WIN_LIBS = $(RAYLIB_WIN_OBJS) -lopengl32 -lgdi32 -lwinmm -lole32 -lz -pthread -static-libgcc
 WIN_CFLAGS = $(CFLAGS) -D_WIN32_WINNT=0x0601
 
 # Compilation Flags
@@ -88,7 +88,7 @@ EMFLAGS += --shell-file libs/web/raylib-web/minshell.html
 EMFLAGS += -DPLATFORM_WEB
 
 EMFLAGS += -s EXPORTED_FUNCTIONS='["_main", "_lupi_load_game", "_malloc", "_free"]'
-EMFLAGS += -s EXPORTED_RUNTIME_METHODS='["ccall", "FS"]'
+EMFLAGS += -s EXPORTED_RUNTIME_METHODS='["ccall","FS","HEAPF32"]'
 
 # Optimization
 OPTIMIZATION = -O2
