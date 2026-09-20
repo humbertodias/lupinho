@@ -245,14 +245,19 @@ static int read_numeral (LexState *ls, SemInfo *seminfo) {
   TValue obj;
   const char *expo = "Ee";
   int first = ls->current;
+  int binary = 0;
   lua_assert(lisdigit(ls->current));
   save_and_next(ls);
   if (first == '0' && check_next2(ls, "xX"))  /* hexadecimal? */
     expo = "Pp";
+  else if (first == '0' && check_next2(ls, "bB"))  /* binary (0b/0B)? */
+    binary = 1;
   for (;;) {
-    if (check_next2(ls, expo))  /* exponent mark? */
+    if (!binary && check_next2(ls, expo))  /* exponent mark? */
       check_next2(ls, "-+");  /* optional exponent sign */
-    else if (lisxdigit(ls->current) || ls->current == '.')  /* '%x|%.' */
+    else if (binary && (ls->current == '0' || ls->current == '1'))
+      save_and_next(ls);
+    else if (!binary && (lisxdigit(ls->current) || ls->current == '.'))
       save_and_next(ls);
     else break;
   }
