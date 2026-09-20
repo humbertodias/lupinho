@@ -13,6 +13,13 @@ CC_MINGW ?= x86_64-w64-mingw32-gcc
 AR_MINGW ?= x86_64-w64-mingw32-ar
 endif
 
+# osxcross on Linux (`o64-clang`); Apple clang on Darwin
+ifeq ($(shell uname -s),Darwin)
+CC_OSX ?= clang
+else
+CC_OSX ?= o64-clang
+endif
+
 # Source Files
 SRC = main.c ui.c lua_api.c
 
@@ -25,9 +32,11 @@ RAYLIB_INCLUDE = -Ilibs/web/raylib-web
 RAYLIB_LIB = libs/web/raylib-web/libraylib.web.a
 RAYLIB_WIN_DIR = libs/windows
 RAYLIB_LINUX_DIR = libs/linux/raylib
+RAYLIB_MACOS_DIR = libs/macos
 RAYLIB_MODULES = rcore rshapes rtextures rtext utils rglfw rmodels raudio
 RAYLIB_LINUX_OBJS = $(addprefix $(RAYLIB_LINUX_DIR)/,$(addsuffix .o,$(RAYLIB_MODULES)))
 RAYLIB_WIN_OBJS = $(addprefix $(RAYLIB_WIN_DIR)/,$(addsuffix .o,$(RAYLIB_MODULES)))
+RAYLIB_MACOS_OBJS = $(addprefix $(RAYLIB_MACOS_DIR)/,$(addsuffix .o,$(RAYLIB_MODULES)))
 RAYLIB_CFLAGS = -std=c99 -D_GNU_SOURCE -DPLATFORM_DESKTOP_GLFW -DGRAPHICS_API_OPENGL_33 \
 	-Wno-missing-braces -Werror=pointer-arith -fno-strict-aliasing -O1 \
 	-I$(RAYLIB_SRC) -I$(RAYLIB_SRC)/external/glfw/include
@@ -49,15 +58,11 @@ NATIVE_LIBS = $(RAYLIB_LINUX_OBJS) -lGL -lm -lpthread -ldl -lrt -lX11 -lXcursor 
 # Native (Linux / macOS / Windows) Source Files
 SRC_NATIVE = main.c ui.c lua_api.c zip.c
 
-# macOS Homebrew prefixes
-MACOS_INCLUDE = $(LUA_55_INCLUDE) \
-	-I/opt/homebrew/include \
-	-I/usr/local/include
-MACOS_LIBS = \
-	-L/opt/homebrew/lib \
-	-L/usr/local/lib \
-	-lraylib -lz -lm \
-	-framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo
+# macOS (osxcross `o64-clang` or native clang)
+MACOS_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
+MACOS_LIBS = $(RAYLIB_MACOS_OBJS) -lz -lm \
+	-framework OpenGL -framework Cocoa -framework IOKit \
+	-framework CoreAudio -framework CoreVideo
 
 # Windows MinGW
 WIN_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
@@ -123,11 +128,19 @@ linux: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_LINUX_OBJS)
 		$(NATIVE_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
 		$(NATIVE_LIBS) $(OPTIMIZATION)
 
-# macOS Target (native desktop; compiles Lua for Darwin)
-macos: $(SRC_NATIVE) $(LUA_55_SRC)
+# macOS Target (osxcross on Linux, or native clang on Darwin)
+$(RAYLIB_MACOS_DIR)/%.o: $(RAYLIB_SRC)/%.c
+	@mkdir -p $(RAYLIB_MACOS_DIR)
+	$(CC_OSX) -c $< -o $@ $(RAYLIB_CFLAGS) -U_GNU_SOURCE
+
+$(RAYLIB_MACOS_DIR)/rglfw.o: $(RAYLIB_SRC)/rglfw.c
+	@mkdir -p $(RAYLIB_MACOS_DIR)
+	$(CC_OSX) -x objective-c -c $< -o $@ $(RAYLIB_CFLAGS) -U_GNU_SOURCE
+
+macos: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_MACOS_OBJS)
 	@mkdir -p ../dist
-	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
-		$(MACOS_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX \
+	$(CC_OSX) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
+		$(MACOS_INCLUDE) $(CFLAGS) -DLUA_USE_MACOSX \
 		$(MACOS_LIBS) $(OPTIMIZATION)
 
 # Linux Static Target (portable binary with static raylib)
@@ -151,11 +164,26 @@ windows: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_OBJS)
 		$(WIN_INCLUDE) $(WIN_CFLAGS) $(OPTIMIZATION) \
 		$(WIN_LIBS)
 
+# Docker SDK: `make docker.linux`, `make docker.macos`, `make docker.windows`
+# Explicit names: BSD make (macOS /usr/bin/make) has no `%` pattern rules.
+docker.linux docker.macos docker.windows:
+	@set -e; \
+	platform=`echo $@ | sed 's/^docker.//'`; \
+	test -f ../Dockerfile.$$platform || { echo "Unknown platform: $$platform (missing Dockerfile.$$platform)"; exit 1; }; \
+	mkdir -p ../dist; \
+	docker build -f ../Dockerfile.$$platform -t lupinho-$$platform ..; \
+	workdir=`awk '/^WORKDIR/{print $$2}' ../Dockerfile.$$platform | tail -1`; \
+	cid=`docker create lupinho-$$platform`; \
+	docker cp "$$cid:$${workdir}/dist/." ../dist/; \
+	docker rm "$$cid"; \
+	echo "Built $$platform -> ../dist/"
+
 # Clean generated files
 clean:
 	rm -rf ../dist/webgame/
 	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static ../dist/lupinho.exe
-	rm -f $(RAYLIB_LINUX_OBJS) $(RAYLIB_WIN_OBJS) $(RAYLIB_LINUX_DIR)/libraylib.a $(RAYLIB_WIN_DIR)/libraylib.a
+	rm -f $(RAYLIB_LINUX_OBJS) $(RAYLIB_WIN_OBJS) $(RAYLIB_MACOS_OBJS) \
+		$(RAYLIB_LINUX_DIR)/libraylib.a $(RAYLIB_WIN_DIR)/libraylib.a
 
 # Help
 help:
@@ -167,19 +195,21 @@ help:
 	@echo "  make production  - Build for WebAssembly (optimized, no debug)"
 	@echo "  make web-game GAME_PATH=game.lupi - Build for Web with embedded .lupi game (output: dist/webgame/)"
 	@echo "  make linux       - Build for Linux desktop (vendored raylib + Lua)"
-	@echo "  make macos       - Build for macOS desktop (requires raylib via Homebrew)"
+	@echo "  make macos       - Build for macOS (osxcross o64-clang, or native clang)"
 	@echo "  make windows     - Build lupinho.exe with MinGW (cross or native)"
+	@echo "  make docker.PLATFORM - Build via Dockerfile.PLATFORM (linux, macos, windows)"
 	@echo "  make static      - Alias of linux with stripped binary"
 	@echo "  make clean       - Remove generated files"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  make web         - Emscripten SDK"
 	@echo "  make linux       - gcc, zlib, X11, OpenGL"
-	@echo "  make macos       - brew install raylib"
+	@echo "  make macos       - osxcross (o64-clang) or Xcode clang; vendored raylib"
 	@echo "  make windows     - MinGW-w64 gcc (x86_64-w64-mingw32-gcc) and zlib"
+	@echo "  make docker.*    - Docker Engine (Dockerfile.linux / .macos / .windows)"
 	@echo "  make static      - same as linux"
 	@echo ""
 	@echo "Note: For WebAssembly builds, Lua must be compiled with Emscripten."
 	@echo "      If you get linking errors, you may need to compile Lua with emcc."
 
-.PHONY: web production linux macos windows static clean help
+.PHONY: web production linux macos windows docker.linux docker.macos docker.windows static clean help

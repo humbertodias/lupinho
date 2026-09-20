@@ -1,10 +1,9 @@
 This patch adds 0b/0B integer literals to Lua 5.5.1 (not in upstream).
+Apply from the lua-5.5.1 directory: patch -p1 < lua-5.5.1-binary-literals.patch
 Lupi games use values like 0b10101010 for bitmasks.
 
-diff --git a/src/libs/linux/lua-5.5.1/src/llex.c b/src/libs/linux/lua-5.5.1/src/llex.c
-index 7cd9fca..d53d4f9 100644
---- a/src/libs/linux/lua-5.5.1/src/llex.c
-+++ b/src/libs/linux/lua-5.5.1/src/llex.c
+--- a/src/llex.c
++++ b/src/llex.c
 @@ -245,14 +245,19 @@ static int read_numeral (LexState *ls, SemInfo *seminfo) {
    TValue obj;
    const char *expo = "Ee";
@@ -27,10 +26,8 @@ index 7cd9fca..d53d4f9 100644
        save_and_next(ls);
      else break;
    }
-diff --git a/src/libs/linux/lua-5.5.1/src/lobject.c b/src/libs/linux/lua-5.5.1/src/lobject.c
-index 763b484..d157d4e 100644
---- a/src/libs/linux/lua-5.5.1/src/lobject.c
-+++ b/src/libs/linux/lua-5.5.1/src/lobject.c
+--- a/src/lobject.c
++++ b/src/lobject.c
 @@ -350,6 +350,14 @@ static const char *l_str2int (const char *s, lua_Integer *result) {
        empty = 0;
      }

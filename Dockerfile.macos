@@ -1,8 +1,25 @@
-# Native macOS deps for `make macos`.
-# GitHub-hosted macOS runners cannot run a macOS OS in Docker, so ci.yml
-# executes the `brew install` line on macos-latest.
-FROM ghcr.io/homebrew/ubuntu24.04:latest
+# syntax=docker/dockerfile:1
+# osxcross ships Linux amd64 binaries; pin the platform so Apple Silicon uses qemu.
+FROM --platform=linux/amd64 crazymax/osxcross:latest-ubuntu AS osxcross
 
-RUN brew install raylib
+FROM --platform=linux/amd64 ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    clang \
+    lld \
+    libc6-dev \
+    make \
+    patch \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=osxcross /osxcross /osxcross
+ENV PATH="/osxcross/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/osxcross/lib"
 
 WORKDIR /work
+COPY . /work/
+RUN patch -d /work/src/libs/linux/lua-5.5.1 -p1 \
+    < /work/src/libs/linux/lua-5.5.1-binary-literals.patch
+RUN make -C /work/src macos

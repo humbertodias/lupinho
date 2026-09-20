@@ -14,42 +14,19 @@ jobs:
         include:
           - name: linux
             os: ubuntu-latest
-            dockerfile: Dockerfile.linux
-            workdir: /lupinho
-            target: linux
             artifact: lupinho
           - name: macos
-            os: macos-latest
-            dockerfile: Dockerfile.macos
-            target: macos
-            artifact: lupinho*
+            os: ubuntu-latest
+            artifact: lupinho
           - name: windows
             os: ubuntu-latest
-            dockerfile: Dockerfile.windows
-            workdir: /work
-            target: windows
             artifact: lupinho.exe
 
     steps:
       - uses: actions/checkout@v7
 
-      - name: Build toolchain image
-        if: runner.os == 'Linux'
-        run: docker build -f ${{ matrix.dockerfile }} -t lupinho-ci .
-
-      - name: Build in container
-        if: runner.os == 'Linux'
-        run: docker run --rm -v "$PWD":${{ matrix.workdir }} -w ${{ matrix.workdir }}/src lupinho-ci make ${{ matrix.target }}
-
-      - name: Install macOS deps
-        if: runner.os == 'macOS'
-        run: |
-          sed -n 's/^RUN brew install //p' "${{ matrix.dockerfile }}" | xargs brew install
-
-      - name: Build on macOS
-        if: runner.os == 'macOS'
-        working-directory: src
-        run: make ${{ matrix.target }}
+      - name: Build with Docker
+        run: make -C src docker.${{ matrix.name }}
 
       - name: Upload core
         uses: actions/upload-artifact@v7
