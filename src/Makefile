@@ -25,6 +25,8 @@ RAYLIB_INCLUDE = -Ilibs/web/raylib-web
 RAYLIB_LIB = libs/web/raylib-web/libraylib.web.a
 RAYLIB_WIN_DIR = libs/windows
 RAYLIB_WIN_LIB = $(RAYLIB_WIN_DIR)/libraylib.a
+RAYLIB_LINUX_DIR = libs/linux/raylib
+RAYLIB_LINUX_LIB = $(RAYLIB_LINUX_DIR)/libraylib.a
 
 # Lua Configuration
 LUA_WEB_INCLUDE = -Ilibs/web/lua-web
@@ -36,13 +38,9 @@ LUA_55_DIR = libs/linux/lua-5.5.1/src
 # lua.c / luac.c are the standalone interpreter and compiler, not the library.
 LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c,$(wildcard $(LUA_55_DIR)/*.c))
 
-# Native (Linux) Libraries
-NATIVE_LIBS = -lraylib -lm -ldl -lpthread -lX11 -lz
-NATIVE_INCLUDE = $(LUA_55_INCLUDE)
-
-# Native (Linux) Static Libraries
-RAYLIB_LINUX_STATIC = libs/linux/raylib/src/libraylib.a
-STATIC_LIBS_FLAGS = -Wl,-Bstatic $(RAYLIB_LINUX_STATIC) -Wl,-Bdynamic -lm -ldl -lpthread -lX11 -lz
+# Native (Linux) Libraries — raylib is built from vendored sources
+NATIVE_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
+NATIVE_LIBS = $(RAYLIB_LINUX_LIB) -lGL -lm -lpthread -ldl -lrt -lX11 -lXcursor -lXinerama -lXrandr -lXi -lz
 
 # Native (Linux / macOS / Windows) Source Files
 SRC_NATIVE = main.c ui.c lua_api.c zip.c
@@ -105,8 +103,17 @@ web-game: $(SRC)
 	$(CC) $(SRC) -o ../dist/webgame/game.html $(RAYLIB_INCLUDE) $(LUA_WEB_INCLUDE) $(CFLAGS) $(EMFLAGS) $(OPTIMIZATION) -DAUTO_LOAD_GAME $(LUA_WEB_LIB) $(RAYLIB_LIB) --preload-file /tmp/lupi-web-game@/loaded_game
 	@echo "Build complete! Output in ../dist/webgame/"
 
+# Raylib static library for Linux
+$(RAYLIB_LINUX_LIB):
+	@mkdir -p $(RAYLIB_LINUX_DIR)
+	$(MAKE) -C $(RAYLIB_SRC) raylib \
+		PLATFORM=PLATFORM_DESKTOP \
+		RAYLIB_LIBTYPE=STATIC \
+		RAYLIB_SRC_PATH=. \
+		RAYLIB_RELEASE_PATH="$(CURDIR)/$(RAYLIB_LINUX_DIR)"
+
 # Linux Target (native desktop)
-linux: $(SRC_NATIVE) $(LUA_55_SRC)
+linux: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_LINUX_LIB)
 	@mkdir -p ../dist
 	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho \
 		$(NATIVE_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
@@ -120,10 +127,9 @@ macos: $(SRC_NATIVE) $(LUA_55_SRC)
 		$(MACOS_LIBS) $(OPTIMIZATION)
 
 # Linux Static Target (portable binary with static raylib)
-static: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_LINUX_STATIC)
-	$(CC_NATIVE) $(SRC_NATIVE) $(LUA_55_SRC) -o ../dist/lupinho-static \
-		$(NATIVE_INCLUDE) $(CFLAGS) -DLUA_USE_POSIX -DLUA_USE_DLOPEN \
-		$(STATIC_LIBS_FLAGS) $(OPTIMIZATION) -s
+static: linux
+	@cp ../dist/lupinho ../dist/lupinho-static
+	strip ../dist/lupinho-static
 
 # Raylib static library for Windows (MinGW)
 $(RAYLIB_WIN_LIB):
@@ -149,7 +155,7 @@ windows: $(SRC_NATIVE) $(LUA_55_SRC) $(RAYLIB_WIN_LIB)
 clean:
 	rm -rf ../dist/webgame/
 	rm -f $(OUTPUT) game.js game.wasm lupi_emulator ../dist/lupinho ../dist/lupinho-static ../dist/lupinho.exe
-	rm -f $(RAYLIB_WIN_LIB) $(RAYLIB_SRC)/*.o
+	rm -f $(RAYLIB_WIN_LIB) $(RAYLIB_LINUX_LIB) $(RAYLIB_SRC)/*.o
 
 # Help
 help:
@@ -160,18 +166,18 @@ help:
 	@echo "  make web         - Build for WebAssembly (development mode with debug)"
 	@echo "  make production  - Build for WebAssembly (optimized, no debug)"
 	@echo "  make web-game GAME_PATH=game.lupi - Build for Web with embedded .lupi game (output: dist/webgame/)"
-	@echo "  make linux       - Build for Linux desktop (requires raylib, zlib)"
+	@echo "  make linux       - Build for Linux desktop (vendored raylib + Lua)"
 	@echo "  make macos       - Build for macOS desktop (requires raylib via Homebrew)"
 	@echo "  make windows     - Build lupinho.exe with MinGW (cross or native)"
-	@echo "  make static      - Build portable Linux binary (static raylib + Lua)"
+	@echo "  make static      - Alias of linux with stripped binary"
 	@echo "  make clean       - Remove generated files"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  make web         - Emscripten SDK"
-	@echo "  make linux       - pacman: raylib zlib"
+	@echo "  make linux       - gcc, zlib, X11, OpenGL"
 	@echo "  make macos       - brew install raylib"
 	@echo "  make windows     - MinGW-w64 gcc (x86_64-w64-mingw32-gcc) and zlib"
-	@echo "  make static      - pacman: zlib (raylib statically linked)"
+	@echo "  make static      - same as linux"
 	@echo ""
 	@echo "Note: For WebAssembly builds, Lua must be compiled with Emscripten."
 	@echo "      If you get linking errors, you may need to compile Lua with emcc."

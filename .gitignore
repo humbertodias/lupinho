@@ -7,3 +7,4 @@ site/dist/*
 *.o
 *.exe
 src/libs/windows/
+src/libs/linux/raylib/*.a
