@@ -28,7 +28,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr-dev \
     libxi-dev \
     patch \
+    imagemagick \
     && rm -rf /var/lib/apt/lists/*
+
+# Debian ImageMagick 6 exposes convert/identify, not IM7 `magick`.
+# lupi-codec calls `magick identify` and `magick input.png ...`.
+RUN printf '%s\n' '#!/bin/sh' \
+      'if [ "$1" = identify ]; then shift; exec identify "$@"; fi' \
+      'exec convert "$@"' > /usr/local/bin/magick \
+    && chmod +x /usr/local/bin/magick
 
 # Install Emscripten
 RUN git clone https://github.com/emscripten-core/emsdk.git /opt/emsdk && \
