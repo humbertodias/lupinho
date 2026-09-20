@@ -50,11 +50,11 @@ RAYLIB_CFLAGS = -std=c99 -D_GNU_SOURCE -DPLATFORM_DESKTOP_GLFW -DGRAPHICS_API_OP
 	-Wno-missing-braces -Werror=pointer-arith -fno-strict-aliasing -O1 \
 	-I$(RAYLIB_SRC) -I$(RAYLIB_SRC)/external/glfw/include
 
-# Lua 5.5.1 (compiled from source on each target)
-LUA_55_INCLUDE = -Ilibs/linux/lua-5.5.1/src
-LUA_55_DIR = libs/linux/lua-5.5.1/src
-# lua.c / luac.c are the standalone interpreter and compiler, not the library.
-LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c,$(wildcard $(LUA_55_DIR)/*.c))
+# Lua 5.5.1 (submodule src/libs/lua; compiled from source on each target)
+LUA_55_INCLUDE = -Ilibs/lua
+LUA_55_DIR = libs/lua
+# Interpreter, compiler, amalgamation, and the debug test module are not the library.
+LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c $(LUA_55_DIR)/onelua.c $(LUA_55_DIR)/ltests.c,$(wildcard $(LUA_55_DIR)/*.c))
 
 # Native (Linux) Libraries — raylib objects built from vendored sources
 NATIVE_INCLUDE = $(LUA_55_INCLUDE) $(RAYLIB_INCLUDE)
@@ -205,6 +205,7 @@ docker.linux docker.macos docker.windows docker.wasm:
 	@set -e; \
 	platform=`echo $@ | sed 's/^docker.//'`; \
 	test -f ../Dockerfile.$$platform || { echo "Unknown platform: $$platform (missing Dockerfile.$$platform)"; exit 1; }; \
+	git -C .. submodule update --init src/libs/lua; \
 	mkdir -p ../dist; \
 	docker build -f ../Dockerfile.$$platform -t lupinho-$$platform ..; \
 	workdir=`awk '/^WORKDIR/{print $$2}' ../Dockerfile.$$platform | tail -1`; \

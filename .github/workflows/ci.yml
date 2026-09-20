@@ -27,6 +27,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
 
       - name: Build with Docker
         run: make -C src docker.${{ matrix.name }}
