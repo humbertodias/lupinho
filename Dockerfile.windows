@@ -15,6 +15,6 @@ WORKDIR /lupinho
 COPY . /lupinho/
 RUN patch -d /lupinho/src/libs/lua -p1 /lupinho/src/libs/lua-5.5.1-binary-literals.patch
 # Install Lua 5.5.1
-RUN cd /lupinho/src/libs/lua && make
+RUN cd /lupinho/src/libs/lua && make CC=x86_64-w64-mingw32-gcc
 ENV PATH=$PATH:/lupinho/src/libs/lua
 RUN make -C /lupinho/src windows
