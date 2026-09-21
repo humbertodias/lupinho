@@ -3,7 +3,7 @@ FROM emscripten/emsdk:latest
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    patch \
+    patch zip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /lupinho
