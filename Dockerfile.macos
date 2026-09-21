@@ -19,8 +19,10 @@ COPY --from=osxcross /osxcross /osxcross
 ENV PATH="/osxcross/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/osxcross/lib"
 
-WORKDIR /work
-COPY . /work/
-RUN patch -d /work/src/libs/lua -p1 \
-    < /work/src/libs/lua-5.5.1-binary-literals.patch
-RUN make -C /work/src macos
+WORKDIR /lupinho
+COPY . /lupinho/
+RUN patch -d /lupinho/src/libs/lua -p1 /lupinho/src/libs/lua-5.5.1-binary-literals.patch
+# Install Lua 5.5.1
+RUN cd /lupinho/src/libs/lua && make
+ENV PATH=$PATH:/lupinho/src/libs/lua
+RUN make -C /lupinho/src macos
