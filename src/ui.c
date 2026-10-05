@@ -236,7 +236,7 @@ void draw_triangle(TriangleItem *triangle) {
 void palset(int position, int bgr555) {
     if (position < 0 || position >= PALETTE_SIZE) return;
 
-    // BGR555 as packed by lupi-codec: bits 0-4 red, 5-9 green, 10-14 blue
+    // Extract BGR555 components (5 bits each)
     int r5 = (bgr555 >> 0) & 0x1F;
     int g5 = (bgr555 >> 5) & 0x1F;
     int b5 = (bgr555 >> 10) & 0x1F;
