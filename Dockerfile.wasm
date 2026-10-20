@@ -8,8 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /lupinho
 COPY . /lupinho/
-RUN patch -d /lupinho/src/libs/lua -p1 /lupinho/src/libs/lua-5.5.1-binary-literals.patch
+RUN patch -d /lupinho/src/libs/linux/lua-5.5.1 -p1 \
+    < /lupinho/src/libs/lua-5.5.1-binary-literals.patch
 # Install Lua 5.5.1
-RUN cd /lupinho/src/libs/lua && make
-ENV PATH=$PATH:/lupinho/src/libs/lua
+RUN make -C /lupinho/src/libs/linux/lua-5.5.1 linux
+ENV PATH=$PATH:/lupinho/src/libs/linux/lua-5.5.1/src
 RUN make -C /lupinho/src web
