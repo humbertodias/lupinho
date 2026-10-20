@@ -22,9 +22,7 @@ ENV LD_LIBRARY_PATH="/osxcross/lib"
 
 WORKDIR /lupinho
 COPY . /lupinho/
-RUN patch -d /lupinho/src/libs/linux/lua-5.5.1 -p1 \
-    < /lupinho/src/libs/lua-5.5.1-binary-literals.patch
-# Host Lua 5.5.1 for PATH. The macOS core compiles the same sources itself.
-RUN make -C /lupinho/src/libs/linux/lua-5.5.1 linux CC="clang -std=gnu99"
-ENV PATH=$PATH:/lupinho/src/libs/linux/lua-5.5.1/src
+# Host Lua 5.5.0 for PATH. The macOS core compiles the same sources itself.
+RUN make -C /lupinho/src/libs/linux/lua-5.5.0 linux CC="clang -std=gnu99"
+ENV PATH=$PATH:/lupinho/src/libs/linux/lua-5.5.0/src
 RUN make -C /lupinho/src macos

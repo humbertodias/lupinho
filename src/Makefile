@@ -50,9 +50,9 @@ RAYLIB_CFLAGS = -std=c99 -D_GNU_SOURCE -DPLATFORM_DESKTOP_GLFW -DGRAPHICS_API_OP
 	-Wno-missing-braces -Werror=pointer-arith -fno-strict-aliasing -O1 \
 	-I$(RAYLIB_SRC) -I$(RAYLIB_SRC)/external/glfw/include
 
-# Lua 5.5.1 (compiled from source on each target)
-LUA_55_INCLUDE = -Ilibs/linux/lua-5.5.1/src
-LUA_55_DIR = libs/linux/lua-5.5.1/src
+# Lua 5.5.0 (compiled from source on each target)
+LUA_55_INCLUDE = -Ilibs/linux/lua-5.5.0/src
+LUA_55_DIR = libs/linux/lua-5.5.0/src
 # lua.c / luac.c are the standalone interpreter and compiler, not the library.
 LUA_55_SRC = $(filter-out $(LUA_55_DIR)/lua.c $(LUA_55_DIR)/luac.c,$(wildcard $(LUA_55_DIR)/*.c))
 
@@ -98,7 +98,7 @@ OPTIMIZATION = -O2
 DEBUG_FLAGS = -DDEBUG_MODE
 PROD_FLAGS = -O3 -s ASSERTIONS=0 -s DISABLE_EXCEPTION_CATCHING=1 -s ELIMINATE_DUPLICATE_FUNCTIONS=1 -DPRODUCTION
 
-# Web (Lua 5.5.1 + vendored raylib, compiled with emcc)
+# Web (Lua 5.5.0 + vendored raylib, compiled with emcc)
 $(RAYLIB_WEB_OBJDIR)/%.o: $(RAYLIB_SRC)/%.c
 	@mkdir -p $(RAYLIB_WEB_OBJDIR)
 	$(CC) -c $< -o $@ $(RAYLIB_WEB_CFLAGS)
