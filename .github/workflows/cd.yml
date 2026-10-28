@@ -72,8 +72,8 @@ jobs:
           cp release/lupinho-windows/lupinho.exe assets/lupinho-windows-x86_64.exe
 
           if [ -f release/lupinho-macos/lupinho ]; then
-            cp release/lupinho-macos/lupinho assets/lupinho-macos-universal
-            chmod +x assets/lupinho-macos-universal
+            cp release/lupinho-macos/lupinho assets/lupinho-macos
+            chmod +x assets/lupinho-macos
           fi
           for arch in x86_64 arm64; do
             src="release/lupinho-macos/lupinho-${arch}"
